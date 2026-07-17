@@ -1,5 +1,7 @@
 # reMarkable Highlights to Anki
 
+Repository: https://github.com/tdm5c/remarkable-highlights-to-anki
+
 Deterministic local pipeline for exporting reMarkable PDF/EPUB highlights to
 Markdown, JSON, and Anki.
 
