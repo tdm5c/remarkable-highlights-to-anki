@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>reMarkable vers Anki</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">rA</div>
+          <div>
+            <h1>reMarkable vers Anki</h1>
+            <p id="connectionStatus">Local</p>
+          </div>
+        </div>
+        <button class="icon-button" id="refreshButton" type="button" title="Actualiser / reessayer">
+          <span aria-hidden="true">↻</span>
+          <span class="sr-only">Actualiser / reessayer</span>
+        </button>
+      </header>
+
+      <section class="toolbar" aria-label="Filtres">
+        <form class="search-field" id="searchForm" role="search">
+          <span aria-hidden="true">⌕</span>
+          <button class="search-button" id="searchButton" type="submit" title="Rechercher">
+            <span aria-hidden="true">⌕</span>
+            <span class="sr-only">Rechercher</span>
+          </button>
+          <input id="searchInput" type="search" placeholder="Rechercher un fichier" autocomplete="off">
+        </form>
+
+        <div class="segmented" aria-label="Nombre de fichiers">
+          <button type="button" data-limit="10" class="active">10</button>
+          <button type="button" data-limit="20">20</button>
+          <button type="button" data-limit="30">30</button>
+          <button type="button" data-limit="all">Tous</button>
+        </div>
+
+        <div class="segmented sort-segmented" aria-label="Tri des fichiers">
+          <button type="button" data-sort="modified" class="active">Recent</button>
+          <button type="button" data-sort="name_asc">A-Z</button>
+          <button type="button" data-sort="name_desc">Z-A</button>
+          <button type="button" data-sort="type_pdf">PDF</button>
+          <button type="button" data-sort="type_epub">EPUB</button>
+        </div>
+
+        <label class="sync-toggle">
+          <input id="syncToggle" type="checkbox" checked>
+          <span>Sync AnkiWeb</span>
+        </label>
+
+        <label class="sync-toggle">
+          <input id="cleanExportsToggle" type="checkbox" checked>
+          <span>Nettoyer exports</span>
+        </label>
+
+        <div class="deck-option">
+          <label class="deck-check">
+            <input id="singleDeckToggle" type="checkbox">
+            <span>Deck unique</span>
+          </label>
+          <input id="singleDeckName" type="text" value="Deck commun" aria-label="Nom du deck unique">
+        </div>
+      </section>
+
+      <main class="workspace">
+        <div class="table-head" aria-hidden="true">
+          <span></span>
+          <span>Type</span>
+          <span>Fichier</span>
+          <span>Modifié</span>
+        </div>
+        <div id="documentList" class="document-list" aria-live="polite"></div>
+      </main>
+
+      <section class="result-panel" id="resultPanel" hidden>
+        <div class="result-heading">
+          <strong id="resultTitle">export terminé</strong>
+          <button class="text-button" id="closeResultButton" type="button">Fermer</button>
+        </div>
+        <div id="resultList" class="result-list"></div>
+      </section>
+
+      <footer class="actionbar">
+        <div class="selection-state">
+          <strong id="selectedCount">0 sélectionné</strong>
+          <span id="statusText"></span>
+        </div>
+        <div class="action-buttons">
+          <button class="text-button" id="selectVisibleButton" type="button">Sélectionner visibles</button>
+          <button class="text-button" id="clearSelectionButton" type="button">Vider</button>
+          <button class="primary-button" id="exportButton" type="button" disabled>Exporter</button>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

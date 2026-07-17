@@ -1,0 +1,15 @@
+data/
+tmp/
+exports/
+.env
+.env.local
+.venv/
+venv/
+*.pyc
+__pycache__/
+*.log
+.agents/
+.codex/
+ref/
+remarkable-anki.md
+prompt_wordpress_export_*.txt
