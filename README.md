@@ -17,7 +17,8 @@ on the device.
 - Keeps one Anki deck per reMarkable document by default.
 - Supports an explicit shared deck for multi-document exports.
 - Adds one previous sentence and one next sentence as back-card context when
-  source text is available.
+  source text is available, with the cited span highlighted as
+  `<mark><strong>...</strong></mark>` on the back.
 - Removes stale notes for the same reMarkable document UUID when highlights
   change.
 - Starts Anki Desktop automatically when AnkiConnect is not reachable.

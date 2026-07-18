@@ -68,9 +68,26 @@ class Highlight:
 
     @property
     def stable_id(self) -> str:
-        normalized = normalize_spaces(self.text).casefold()
-        digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
-        return f"rm:{self.document_uuid}:{self.page_start}-{self.page_end}:{digest}"
+        return stable_id_for_text(
+            self.document_uuid, self.page_start, self.page_end, self.text
+        )
+
+    @property
+    def legacy_stable_ids(self) -> list[str]:
+        legacy_text = legacy_pdf_ligature_artifact_text(self.text)
+        if legacy_text == self.text:
+            return []
+        return [
+            stable_id_for_text(
+                self.document_uuid, self.page_start, self.page_end, legacy_text
+            )
+        ]
+
+
+def stable_id_for_text(document_uuid: str, page_start: int, page_end: int, text: str) -> str:
+    normalized = normalize_spaces(text).casefold()
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
+    return f"rm:{document_uuid}:{page_start}-{page_end}:{digest}"
 
 
 def main() -> int:
@@ -791,7 +808,7 @@ def extract_source_texts(source_path: Path) -> list[str]:
     doc = fitz.open(source_path)
     texts = []
     for page in doc:
-        texts.append(repair_mojibake(page.get_text()))
+        texts.append(clean_extracted_text(page.get_text()))
     return texts
 
 
@@ -882,10 +899,65 @@ def fallback_text_blocks(data: bytes) -> list[tuple[int, str]]:
 
 def clean_rm_text(text: str) -> str:
     text = text.replace("\x00", "")
-    text = repair_mojibake(text)
+    text = clean_extracted_text(text)
     text = normalize_spaces(text)
     while text.endswith("l!") or text.endswith("lA"):
         text = text[:-2].rstrip()
+    return text
+
+
+def clean_extracted_text(text: str) -> str:
+    text = repair_mojibake(text)
+    return repair_pdf_ligature_artifacts(text)
+
+
+def repair_pdf_ligature_artifacts(text: str) -> str:
+    replacements = {
+        "\ufb00": "ff",
+        "\ufb01": "fi",
+        "\ufb02": "fl",
+        "\ufb03": "ffi",
+        "\ufb04": "ffl",
+        "\ufb05": "st",
+        "\ufb06": "st",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+
+    # Some reMarkable EPUB sidecar PDFs expose broken font glyph maps through
+    # PDF text extraction. Repair only word-like positions.
+    text = re.sub(r"(?<=\d)>(?=[A-Za-z])", " fi", text)
+    text = re.sub(r"(?<![A-Za-z0-9])>(?=[A-Za-z])", "fi", text)
+    text = re.sub(r"(?<=[A-Za-z])>(?=[A-Za-z])", "fi", text)
+    text = re.sub(r"(?<=[A-Za-z])\?(?=[A-Za-z])", "ff", text)
+    text = re.sub(r"(?<=[a-z])W(?=[a-z])", "ffl", text)
+    text = re.sub(r"\bdi\s+culties\b", "difficulties", text)
+    text = re.sub(r"\bdi\s+culty\b", "difficulty", text)
+    text = re.sub(r"\bdi\s+cult\b", "difficult", text)
+    text = re.sub(r"\bo\s+ces\b", "offices", text)
+    text = re.sub(r"\bo\s+ce\b", "office", text)
+    text = re.sub(r"\ba\s+rmations\b", "affirmations", text)
+    text = re.sub(r"\ba\s+rmation\b", "affirmation", text)
+    text = re.sub(r"\ba\s+rmed\b", "affirmed", text)
+    text = re.sub(r"\ba\s+rm\b", "affirm", text)
+    return text
+
+
+def legacy_pdf_ligature_artifact_text(text: str) -> str:
+    text = re.sub(r"\bdifficulties\b", "di culties", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bdifficulty\b", "di culty", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bdifficult\b", "di cult", text, flags=re.IGNORECASE)
+    text = re.sub(r"\boffices\b", "o ces", text, flags=re.IGNORECASE)
+    text = re.sub(r"\boffice\b", "o ce", text, flags=re.IGNORECASE)
+    text = re.sub(r"\baffirmations\b", "a rmations", text, flags=re.IGNORECASE)
+    text = re.sub(r"\baffirmation\b", "a rmation", text, flags=re.IGNORECASE)
+    text = re.sub(r"\baffirmed\b", "a rmed", text, flags=re.IGNORECASE)
+    text = re.sub(r"\baffirm\b", "a rm", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=[a-z])ffl(?=[a-z])", "W", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<![A-Za-z0-9])fi(?=[A-Za-z])", ">", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=[A-Za-z])fi(?=[A-Za-z])", ">", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=\d)\s+fi(?=[A-Za-z])", ">", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?<=[A-Za-z])ff(?=[A-Za-z])", "?", text, flags=re.IGNORECASE)
     return text
 
 
@@ -1192,7 +1264,7 @@ def dict_to_highlight(
 
 def build_context(data: dict, page_texts: list[str]) -> dict[str, str]:
     highlight_text = normalize_spaces(data["text"])
-    fallback_html = f"<strong>{html.escape(highlight_text)}</strong>"
+    fallback_html = highlighted_html(highlight_text)
     fallback_markdown = f"**{highlight_text}**"
     if (
         data["start"] is None
@@ -1221,7 +1293,7 @@ def build_context(data: dict, page_texts: list[str]) -> dict[str, str]:
     highlighted = normalize_spaces(highlighted)
     text = join_context_parts([before, highlighted, after])
     html_context = join_context_parts(
-        [html.escape(before), f"<strong>{html.escape(highlighted)}</strong>", html.escape(after)]
+        [html.escape(before), highlighted_html(highlighted), html.escape(after)]
     )
     markdown_context = join_context_parts([before, f"**{highlighted}**", after])
     return {
@@ -1269,7 +1341,7 @@ def build_cross_page_context(
     html_context = join_context_parts(
         [
             html.escape(before),
-            f"<strong>{html.escape(highlight_text)}</strong>",
+            highlighted_html(highlight_text),
             html.escape(after),
         ]
     )
@@ -1279,6 +1351,10 @@ def build_cross_page_context(
         "html": html_context,
         "markdown": markdown_context,
     }
+
+
+def highlighted_html(text: str) -> str:
+    return f"<mark><strong>{html.escape(text)}</strong></mark>"
 
 
 def sentence_spans(text: str) -> list[tuple[int, int, bool]]:
@@ -1518,7 +1594,14 @@ class AnkiConnect:
         deck_name = make_deck_name(deck_prefix, deck_name_override or document_name)
         self.invoke("createDeck", {"deck": deck_name})
         current_ids = {highlight.stable_id for highlight in highlights}
-        existing_notes = self.notes_by_remarkable_id(list(current_ids))
+        lookup_ids = sorted(
+            {
+                lookup_id
+                for highlight in highlights
+                for lookup_id in [highlight.stable_id, *highlight.legacy_stable_ids]
+            }
+        )
+        existing_notes = self.notes_by_remarkable_id(lookup_ids)
         note_specs = []
         update_actions = []
         added_notes = []
@@ -1526,6 +1609,11 @@ class AnkiConnect:
 
         for highlight in highlights:
             note_id = existing_notes.get(highlight.stable_id)
+            if note_id is None:
+                for legacy_id in highlight.legacy_stable_ids:
+                    note_id = existing_notes.get(legacy_id)
+                    if note_id is not None:
+                        break
             fields = self.highlight_fields(document_name, highlight)
             spec = {"highlight_id": highlight.stable_id, "note_id": note_id}
             note_specs.append(spec)
@@ -1591,7 +1679,7 @@ class AnkiConnect:
     def highlight_fields(document_name: str, highlight: Highlight) -> dict[str, str]:
         return {
             "Citation": html.escape(highlight.text).replace("\n", "<br>"),
-            "Back": highlight.context_html or f"<strong>{html.escape(highlight.text)}</strong>",
+            "Back": highlight.context_html or highlighted_html(highlight.text),
             "RemarkableId": highlight.stable_id,
             "Source": document_name,
             "Page": str(highlight.page_start)
